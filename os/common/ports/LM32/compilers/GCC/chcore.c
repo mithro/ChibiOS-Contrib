@@ -48,9 +48,55 @@
 /* Module local variables.                                                   */
 /*===========================================================================*/
 
+bool __lm32_in_isr;
+
 /*===========================================================================*/
 /* Module local functions.                                                   */
 /*===========================================================================*/
+
+/*
+565	                r_IE.IE  = (0x1 & wData)? 1: 0;
+566	                r_IE.EIE = (0x2 & wData)? 1: 0;
+567	                r_IE.BIE = (0x4 & wData)? 1: 0;
+
+reg ie;                                         // Interrupt enable
+reg eie;                                        // Exception interrupt enable
+`ifdef CFG_DEBUG_ENABLED
+reg bie;                                        // Breakpoint interrupt enable
+
+*/
+
+static inline unsigned int irq_getie(void)
+{
+  unsigned int ie;
+  __asm__ __volatile__("rcsr %0, IE" : "=r" (ie));
+  return ie;
+}
+
+static inline void irq_setie(unsigned int ie)
+{
+  __asm__ __volatile__("wcsr IE, %0" : : "r" (ie));
+}
+
+static inline unsigned int irq_getmask(void)
+{
+  unsigned int mask;
+  __asm__ __volatile__("rcsr %0, IM" : "=r" (mask));
+  return mask;
+}
+
+static inline void irq_setmask(unsigned int mask)
+{
+  __asm__ __volatile__("wcsr IM, %0" : : "r" (mask));
+}
+
+static inline unsigned int irq_pending(void)
+{
+  unsigned int pending;
+  __asm__ __volatile__("rcsr %0, IP" : "=r" (pending));
+  return pending;
+}
+
 
 /*===========================================================================*/
 /* Module exported functions.                                                */

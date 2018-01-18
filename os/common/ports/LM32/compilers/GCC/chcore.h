@@ -30,6 +30,8 @@
 #ifndef CHCORE_H
 #define CHCORE_H
 
+extern bool __lm32_in_isr;
+
 /*===========================================================================*/
 /* Module constants.                                                         */
 /*===========================================================================*/
@@ -67,19 +69,19 @@
  * @{
  */
 /**
- * @brief   Macro defining an XXX architecture.
+ * @brief   Macro defining an LM32 architecture.
  */
-#define PORT_ARCHITECTURE_XXX
+#define PORT_ARCHITECTURE_LM32
 
 /**
- * @brief   Macro defining the specific XXX architecture.
+ * @brief   Macro defining the specific LM32 architecture.
  */
-#define PORT_ARCHITECTURE_XXX_YYY
+#define PORT_ARCHITECTURE_LM32_LITEX
 
 /**
  * @brief   Name of the implemented architecture.
  */
-#define PORT_ARCHITECTURE_NAME          "XXX Architecture"
+#define PORT_ARCHITECTURE_NAME          "LM32 Architecture"
 
 /**
  * @brief   Compiler name and version.
@@ -94,6 +96,8 @@
 /**
  * @brief   Port-specific information string.
  */
+
+/* FIXME: Import PLATFORM / TARGET info from the include/generated/csr.h file */
 #define PORT_INFO                       "no info"
 /** @} */
 
@@ -133,8 +137,8 @@
 /**
  * @brief   Enables a "wait for interrupt" instruction in the idle loop.
  */
-#if !defined(PORT_XXX_WFI_SLEEP_IDLE) || defined(__DOXYGEN__)
-#define PORT_XXX_ENABLE_WFI_IDLE      FALSE
+#if !defined(PORT_LM32_WFI_SLEEP_IDLE) || defined(__DOXYGEN__)
+#define PORT_LM32_ENABLE_WFI_IDLE      FALSE
 #endif
 
 /*===========================================================================*/
@@ -151,30 +155,42 @@
 
 /**
  * @brief   Type of stack and memory alignment enforcement.
- * @note    In this architecture the stack alignment is enforced to 64 bits.
+ * @note    In this architecture the stack alignment is enforced to 32 bits.
  */
-typedef uint64_t stkalign_t;
+typedef uint32_t stkalign_t;
 
 /**
  * @brief   Interrupt saved context.
  * @details This structure represents the stack frame saved during a
  *          preemption-capable interrupt handler.
- * @note    R2 and R13 are not saved because those are assumed to be immutable
- *          during the system life cycle.
+ * @note    R0 is not saved because it is assumed to be immutable
+ *          during the system life cycle (should always be zero).
  */
 struct port_extctx {
+  reglm32_t pc;
 };
 
 /**
  * @brief   System saved context.
  * @details This structure represents the inner stack frame during a context
  *          switching.
- * @note    R2 and R13 are not saved because those are assumed to be immutable
- *          during the system life cycle.
- * @note    LR is stored in the caller context so it is not present in this
- *          structure.
+ * @note    R0 is not saved because it is assumed to be immutable
+ *          during the system life cycle (should always be zero).
  */
 struct port_intctx {
+  reglm32_t r1;
+  reglm32_t r2;
+  reglm32_t r3;
+  reglm32_t r4;
+  reglm32_t r5;
+  reglm32_t r6;
+  reglm32_t r7;
+  reglm32_t r8;
+  reglm32_t r9;
+  reglm32_t r10;
+  reglm32_t sp;
+  reglm32_t ea;
+  reglm32_t ba;
 };
 
 /**
@@ -234,14 +250,18 @@ struct port_context {
  * @details This macro must be inserted at the start of all IRQ handlers
  *          enabled to invoke system APIs.
  */
-#define PORT_IRQ_PROLOGUE()
+#define PORT_IRQ_PROLOGUE() { \
+  __lm32_in_isr = true; \
+  }
 
 /**
  * @brief   IRQ epilogue code.
  * @details This macro must be inserted at the end of all IRQ handlers
  *          enabled to invoke system APIs.
  */
-#define PORT_IRQ_EPILOGUE()
+#define PORT_IRQ_EPILOGUE() { \
+  __lm32_in_isr = false; \
+  }
 
 /**
  * @brief   IRQ handler function declaration.
@@ -311,8 +331,7 @@ extern "C" {
  * @return              The interrupts status.
  */
 static inline syssts_t port_get_irq_status(void) {
-
-  return 0;
+  return irq_getmask();
 }
 
 /**
@@ -325,10 +344,7 @@ static inline syssts_t port_get_irq_status(void) {
  * @retval true         the word specified an enabled interrupts status.
  */
 static inline bool port_irq_enabled(syssts_t sts) {
-
-  (void)sts;
-
-  return false;
+  return (sts & (syssts_t)1) == (systs_t)1;
 }
 
 /**
@@ -339,8 +355,7 @@ static inline bool port_irq_enabled(syssts_t sts) {
  * @retval true         running in ISR mode.
  */
 static inline bool port_is_isr_context(void) {
-
-  return false;
+  return __lm32_in_isr;
 }
 
 /**
@@ -349,7 +364,7 @@ static inline bool port_is_isr_context(void) {
  *          actions.
  */
 static inline void port_lock(void) {
-
+  irq_setie(false);
 }
 
 /**
@@ -358,7 +373,7 @@ static inline void port_lock(void) {
  *          actions.
  */
 static inline void port_unlock(void) {
-
+  irq_setie(true);
 }
 
 /**
@@ -386,7 +401,7 @@ static inline void port_unlock_from_isr(void) {
  * @note    Of course non-maskable interrupt sources are not included.
  */
 static inline void port_disable(void) {
-
+  irq_setie(false);
 }
 
 /**
@@ -394,14 +409,14 @@ static inline void port_disable(void) {
  * @note    Interrupt sources above kernel level remains enabled.
  */
 static inline void port_suspend(void) {
-
+  irq_setie(false);
 }
 
 /**
  * @brief   Enables all the interrupt sources.
  */
 static inline void port_enable(void) {
-
+  irq_setie(true);
 }
 
 /**
@@ -413,7 +428,7 @@ static inline void port_enable(void) {
  */
 static inline void port_wait_for_interrupt(void) {
 
-#if PORT_XXX_ENABLE_WFI_IDLE
+#if PORT_LM32_ENABLE_WFI_IDLE
 #endif
 }
 
@@ -423,7 +438,7 @@ static inline void port_wait_for_interrupt(void) {
  * @return              The realtime counter value.
  */
 static inline rtcnt_t port_rt_get_counter_value(void) {
-
+  /* FIXME: Maybe use the Cycle counter register here? */
   return 0;
 }
 
